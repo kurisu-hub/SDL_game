@@ -1,0 +1,16 @@
+# VS缓存目录
+.vs/
+*.suo
+*.vcxproj.user
+*.vsidx
+
+# VSCode
+.vscode/
+
+# 编译输出
+Debug/
+Release/
+build/
+*.exe
+*.obj
+*.pdb
