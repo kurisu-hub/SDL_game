@@ -19,18 +19,16 @@ public:
 	void on_update(double delta)
 	{
 		for (Bullet* bullet : bullet_list)
-		{
 			bullet->on_update(delta);
-			
-			bullet_list.erase(std::remove_if(bullet_list.begin(), bullet_list.end(), 
-				[](const Bullet* bullet)
-				{	
-					//如果可以删除即bool值为true，则返回true让erase函数删除
-					bool deletable = bullet->can_remove();
-					if (deletable)delete bullet;
-					return deletable;
-				}), bullet_list.end());
-		}
+
+		// 遍历结束后统一回收，避免多颗子弹同帧消失时迭代器失效。
+		bullet_list.erase(std::remove_if(bullet_list.begin(), bullet_list.end(),
+			[](Bullet* bullet)
+			{
+				if (!bullet->can_remove()) return false;
+				delete bullet;
+				return true;
+			}), bullet_list.end());
 	}
 	
 	void on_render(SDL_Renderer* renderer)

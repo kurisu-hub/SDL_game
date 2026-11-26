@@ -10,7 +10,7 @@ class Bullet
 {
 public:
 	Bullet() = default;
-	~Bullet() = default;
+	virtual ~Bullet() = default;
 
 	void set_velocity(const Vector2& velocity)
 	{
