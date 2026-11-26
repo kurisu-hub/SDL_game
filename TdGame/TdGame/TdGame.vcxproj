@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -179,6 +179,14 @@
     <ClInclude Include="wave.h" />
     <ClInclude Include="wave_manager.h" />
   </ItemGroup>
+  <ItemGroup>
+    <GameAsset Include="map*.csv;level*.json;config.json;*.dll" />
+    <GameArt Include="resources\**\*" />
+  </ItemGroup>
+  <Target Name="CopyGameAssets" AfterTargets="Build" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Copy SourceFiles="@(GameAsset)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(GameArt)" DestinationFiles="@(GameArt->'$(OutDir)resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

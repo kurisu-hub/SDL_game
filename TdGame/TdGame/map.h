@@ -58,6 +58,7 @@ public:
 		if (tile_map_temp.empty() || tile_map_temp[0].empty())
 			return false;
 		tile_map = tile_map_temp;
+		spawner_route_pool.clear();
 		generate_map_cache();
 		return true;
 	}
@@ -85,9 +86,9 @@ public:
 		return spawner_route_pool;
 	}
 	//放置防御塔
-	void place_tower(const SDL_Point& idx_tile) 
+	void set_tower_occupied(const SDL_Point& idx_tile, bool occupied) 
 	{
-		tile_map[idx_tile.y][idx_tile.x].has_tower = true;
+		tile_map[idx_tile.y][idx_tile.x].has_tower = occupied;
 	}
 
 private:

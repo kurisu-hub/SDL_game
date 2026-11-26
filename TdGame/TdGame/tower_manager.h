@@ -20,85 +20,34 @@ class TowerManager:public Manager<TowerManager>
 public:
 	void on_update(double delta)
 	{
-		for (Tower* tower : tower_list)
+		for (const auto& entry : tower_list)
 		{
-			tower->on_update(delta);
+			entry.tower->on_update(delta);
 		}
 	}
 
 	void on_render(SDL_Renderer* renderer)
 	{
-		for (Tower* tower : tower_list)
+		for (const auto& entry : tower_list)
 		{
-			tower->on_render(renderer);
+			entry.tower->on_render(renderer);
 		}
 	}
 
-	double get_place_const(TowerType type)
+	const Tower* find_tower(SDL_Point idx) const
 	{
-		static ConfigManager* instance = ConfigManager::instance();
-		switch (type)
-		{
-		case Archer:
-			return instance->archer_template.cost[instance->level_archer];
-
-			break;
-		case Axeman:
-			return instance->axeman_template.cost[instance->level_axeman];
-			break;
-		case Gunner:
-			return instance->gunner_template.cost[instance->level_gunner];
-			break;
-		}
-
-		return 0;
-
-	}
-
-	double get_upgrade_const(TowerType type)
-	{
-		static ConfigManager* instance = ConfigManager::instance();
-
-		switch (type)
-		{
-		case Archer:
-			return instance->level_archer == 9 ? -1 :
-				instance->archer_template.upgrade_cost[instance->level_archer];
-			break;
-		case Axeman:
-			return instance->level_axeman == 9 ? -1 :
-				instance->axeman_template.upgrade_cost[instance->level_axeman];
-			break;
-		case Gunner:
-			return instance->level_gunner == 9 ? -1 :
-				instance->gunner_template.upgrade_cost[instance->level_gunner];
-			break;
-		}
-		
-		return 0;
-	}
-	double get_damage_range(TowerType type)
-	{
-		static::ConfigManager* instance = ConfigManager::instance();
-		
-		switch (type)
-		{
-		case Archer:
-			return instance->archer_template.view_range[instance->level_archer];
-			break;
-		case Axeman:
-			return instance->axeman_template.view_range[instance->level_axeman];
-			break;
-		case Gunner:
-			return instance->gunner_template.view_range[instance->level_gunner];
-			break;
-		}
-
-		return 0;
+		for (const auto& entry : tower_list)
+			if (entry.idx.x == idx.x && entry.idx.y == idx.y) return entry.tower;
+		return nullptr;
 	}
 
 	void place_tower(TowerType type, const SDL_Point& idx)
 	{
+		auto* config = ConfigManager::instance();
+		const double price = config->tower_stats(type).cost[0];
+		auto* coins = CoinManager::instance();
+		if (coins->get_current_coin_num() < price || find_tower(idx)) return;
+
 		Tower* tower = nullptr;
 		
 		switch (type)
@@ -123,7 +72,9 @@ public:
 		position.x = rect.x +idx.x * SIZE_TILE +SIZE_TILE / 2;
 		position.y = rect.y+idx.y * SIZE_TILE + SIZE_TILE / 2;
 		tower->set_position(position);
-		tower_list.push_back(tower);
+		tower_list.push_back({idx, tower, price});
+		coins->decrease_coin(price);
+		config->map.set_tower_occupied(idx, true);
 		static const ResourcesManager::SoundPool& sound_pool
 			= ResourcesManager::instance()->get_sound_pool();
 
@@ -131,36 +82,52 @@ public:
 		
 	}
 
-	void upgrade_tower(TowerType type)
+	double refund_at(SDL_Point idx) const
 	{
-		ConfigManager* instance = ConfigManager::instance();
-		
-		switch (type)
+		for (const auto& entry : tower_list)
+			if (entry.idx.x == idx.x && entry.idx.y == idx.y) return entry.build_price;
+		return 0;
+	}
+
+	void upgrade_at(SDL_Point idx)
+	{
+		for (const auto& entry : tower_list)
+			if (entry.idx.x == idx.x && entry.idx.y == idx.y)
+			{
+				entry.tower->buy_upgrade();
+				return;
+			}
+	}
+
+	// 按建造时实付金额退款；移除记录后，同一格不能重复领取。
+	void withdraw_at(SDL_Point idx)
+	{
+		for (auto it = tower_list.begin(); it != tower_list.end(); ++it)
 		{
-		case Archer:
-			instance->level_archer = instance->level_archer >= 9 ? 9 : instance->level_archer + 1;
-			break;
-		case Axeman:
-			instance->level_axeman = instance->level_axeman >= 9 ? 9 : instance->level_axeman + 1;
-			break;
-		case Gunner:
-			instance->level_gunner = instance->level_gunner >= 9 ? 9 : instance->level_gunner + 1;
-			break;
+			if (it->idx.x != idx.x || it->idx.y != idx.y) continue;
+			CoinManager::instance()->increase_coin(it->build_price);
+			ConfigManager::instance()->map.set_tower_occupied(idx, false);
+			delete it->tower;
+			tower_list.erase(it);
+			return;
 		}
-
-
-		static const ResourcesManager::SoundPool& sound_pool
-			= ResourcesManager::instance()->get_sound_pool();
-
-
-		Mix_PlayChannel(-1, sound_pool.find(ResID::Sound_TowerLevelUp)->second, 0);
 	}
 
 protected:
 	TowerManager() = default;
-	~TowerManager() = default;
+	~TowerManager()
+	{
+		for (const auto& entry : tower_list)
+			delete entry.tower;
+	}
 private:
-	std::vector<Tower*>tower_list;
+	struct Entry
+	{
+		SDL_Point idx;
+		Tower* tower;
+		double build_price;
+	};
+	std::vector<Entry> tower_list;
 };
 
 

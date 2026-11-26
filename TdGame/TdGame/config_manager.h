@@ -3,6 +3,7 @@
 
 #include "map.h"
 #include "wave.h"
+#include "tower_type.h"
 #include "manager.h"
 
 #include <SDL.h>
@@ -57,9 +58,12 @@ public:
 	Map map;
 	std::vector<Wave> wave_list;
 
-	int level_archer = 0;
-	int level_axeman = 0;
-	int level_gunner = 0;
+	const TowerTemplate& tower_stats(TowerType type) const
+	{
+		if (type == Archer) return archer_template;
+		if (type == Axeman) return axeman_template;
+		return gunner_template;
+	}
 
 	bool is_game_win = true;
 	bool is_game_over = false;
@@ -102,14 +106,15 @@ public:
 			return false;
 		}
 
+		std::vector<Wave> waves;
 		cJSON* json_wave = nullptr;
 		cJSON_ArrayForEach(json_wave, json_root)
 		{
 			if (json_wave->type != cJSON_Object)
 				continue;
 
-			wave_list.emplace_back();
-			Wave& wave = wave_list.back();
+			waves.emplace_back();
+			Wave& wave = waves.back();
 
 			cJSON* json_wave_rewards = cJSON_GetObjectItem(json_wave, "rewards");
 			if (json_wave_rewards && json_wave_rewards->type == cJSON_Number)
@@ -152,16 +157,17 @@ public:
 					}
 				}
 
-				if (wave.spawn_event_list.empty())
-					wave_list.pop_back();
 			}
+			if (wave.spawn_event_list.empty())
+				waves.pop_back();
 		}
 
 		cJSON_Delete(json_root);
 
-		if (wave_list.empty())
+		if (waves.empty())
 			return false;
 
+		wave_list.swap(waves);
 		return true;
 	}
 

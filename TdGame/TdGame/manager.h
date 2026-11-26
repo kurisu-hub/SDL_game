@@ -12,6 +12,13 @@ public:
 
 	}
 
+	// 释放本关实例；下次访问时根据新关卡配置重新创建。
+	static void release()
+	{
+		delete manager;
+		manager = nullptr;
+	}
+
 protected:
 	Manager() = default;
 	~Manager() = default;

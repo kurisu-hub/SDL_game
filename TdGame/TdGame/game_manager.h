@@ -51,7 +51,6 @@ public:
 
 			on_renderer();
 
-
 			SDL_RenderPresent(renderer);
 
 		}
@@ -69,11 +68,7 @@ protected:
 
 		ConfigManager* config = ConfigManager::instance();
 
-
-		init_assert(config->map.load("map.csv"), "加载游戏地图失败");
-		init_assert(config->load_level_config("level.json"), "加载关卡配置失败");
 		init_assert(config->load_game_config("config.json"), "加载游戏配置失败");
-
 
 		window = SDL_CreateWindow(config->basic_template.window_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 			config->basic_template.window_width, config->basic_template.window_height, SDL_WINDOW_SHOWN);
@@ -82,18 +77,18 @@ protected:
 		renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE);
 		init_assert(renderer, "渲染失败");
 		init_assert(ResourcesManager::instance()->load_from_file(renderer), "加载游戏资源失败");
-		init_assert(generate_tile_map_texture(), "加载图片贴图失败");
+		load_stage();
 
 		status_bar.set_position(15, 15);
 		
 		place_panel = new PlacePanel();
-		upgrade_panel = new UpgradePanel();
 		banner = new Banner();
 
 	}
 
 	~GameManager()
 	{
+		tower_actions.close();
 		SDL_DestroyRenderer(renderer);
 		SDL_DestroyWindow(window);
 
@@ -103,6 +98,21 @@ protected:
 		SDL_Quit();
 	}
 private:
+	struct Stage
+	{
+		const char* name;
+		const char* map;
+		const char* waves;
+	};
+	static constexpr int stage_count = 3;
+	const Stage stages[stage_count] = {
+		{ u8"村口弯道", "map.csv", "level.json" },
+		{ u8"双路会合", "map2.csv", "level2.json" },
+		{ u8"两翼围城", "map3.csv", "level3.json" }
+	};
+	int stage_index = 0;
+	int displayed_wave = 0;
+	bool result_shown = false;
 	bool is_quit = false;
 	SDL_Window* window = nullptr;
 	SDL_Renderer* renderer = nullptr;
@@ -112,10 +122,57 @@ private:
 	StatusBar status_bar;
 
 	Panel* place_panel = nullptr;
-	Panel* upgrade_panel = nullptr;
+	TowerActionPanel tower_actions;
 	Banner* banner = nullptr;
 
 private:
+	// 替换地图和波次后重建底图；关卡名与当前波次显示在窗口标题中。
+	void load_stage()
+	{
+		const Stage& stage = stages[stage_index];
+		auto* config = ConfigManager::instance();
+		init_assert(config->map.load(stage.map), stage.map);
+		init_assert(config->load_level_config(stage.waves), stage.waves);
+		SDL_DestroyTexture(tex_tile_map);
+		init_assert(generate_tile_map_texture(), "加载图片贴图失败");
+		displayed_wave = 0;
+		update_stage_title();
+	}
+
+	void update_stage_title()
+	{
+		int wave = WaveManager::instance()->wave_number();
+		if (wave == displayed_wave) return;
+		displayed_wave = wave;
+		auto* config = ConfigManager::instance();
+		std::string title = config->basic_template.window_title + u8"  第" + std::to_string(stage_index + 1)
+			+ u8"/3关 · " + stages[stage_index].name + u8"  第" + std::to_string(wave)
+			+ "/" + std::to_string(config->wave_list.size()) + u8"波  |  左键点塔升级，右键点塔撤回";
+		SDL_SetWindowTitle(window, title.c_str());
+	}
+
+	// 胜利横幅结束后换图。先回收持有旧路线的实体，再重置本关资源与输入状态。
+	void advance_stage()
+	{
+		WaveManager::release();
+		BulletManager::release();
+		TowerManager::release();
+		EnemyManager::release();
+		CoinManager::release();
+		HomeManager::release();
+		PlayerManager::release();
+		delete place_panel;
+		tower_actions.close();
+		place_panel = new PlacePanel();
+		auto* config = ConfigManager::instance();
+		config->is_game_over = false;
+		config->is_game_win = false;
+		result_shown = false;
+		++stage_index;
+		load_stage();
+		status_bar.on_update(renderer);
+	}
+
 	void init_assert(bool flag, const char* err_msg)
 	{
 		if (flag)return;
@@ -137,16 +194,21 @@ private:
 		case SDL_MOUSEBUTTONDOWN:
 			if (instance->is_game_over)
 				break;
-			if (get_cursor_idx_tile(idx_tile_selected, event.motion.x, event.motion.y))
+			if (event.button.button != SDL_BUTTON_LEFT && event.button.button != SDL_BUTTON_RIGHT) break;
+			place_panel->hide();
+			if (event.button.button == SDL_BUTTON_LEFT &&
+				tower_actions.handle_left_click({event.button.x, event.button.y})) return;
+			tower_actions.close();
+			if (get_cursor_idx_tile(idx_tile_selected, event.button.x, event.button.y))
 			{
 				get_selected_tile_center_pos(pos_center, idx_tile_selected);
-				if (check_home(idx_tile_selected))
+				if (TowerManager::instance()->find_tower(idx_tile_selected))
 				{
-					upgrade_panel->set_idx_tile(idx_tile_selected);
-					upgrade_panel->set_center_pos(pos_center);
-					upgrade_panel->show();
+					auto action = event.button.button == SDL_BUTTON_RIGHT ?
+						TowerActionPanel::Action::Withdraw : TowerActionPanel::Action::Upgrade;
+					tower_actions.show(renderer, idx_tile_selected, pos_center, action);
 				}
-				else if (can_place_tower(idx_tile_selected))
+				else if (event.button.button == SDL_BUTTON_LEFT && !check_home(idx_tile_selected) && can_place_tower(idx_tile_selected))
 				{
 					place_panel->set_idx_tile(idx_tile_selected);
 					place_panel->set_center_pos(pos_center);
@@ -160,48 +222,60 @@ private:
 		if (!instance->is_game_over)
 		{
 			place_panel->on_input(event);
-			upgrade_panel->on_input(event);
 			PlayerManager::instance()->on_input(event);
 		}
 
 	}
 	void on_update(double delta)
 	{
-		static bool is_game_over_last_tick = false;
 
 		static ConfigManager* instance = ConfigManager::instance();
 		if (!instance->is_game_over)
 		{	
 			status_bar.on_update(renderer);
 			place_panel->on_update(renderer);
-			upgrade_panel->on_update(renderer);
 			WaveManager::instance()->on_update(delta);
 			EnemyManager::instance()->on_update(delta);
 			BulletManager::instance()->on_update(delta);
 
 			TowerManager::instance()->on_update(delta);
 			PlayerManager::instance()->on_update(delta);
+			CoinManager::instance()->on_update(delta);
 
+			if (HomeManager::instance()->get_current_hp() <= 0)
+			{
+				instance->is_game_win = false;
+				instance->is_game_over = true;
+			}
 			if (!instance->is_game_over)
+			{
+				update_stage_title();
 				return;
+			}
 		}
-		//如果上一帧结束这一帧没有结束的话
-		if (!is_game_over_last_tick && instance->is_game_over)
+		if (!result_shown)
 		{
 			static const ResourcesManager::SoundPool& sound_pool =
 				ResourcesManager::instance()->get_sound_pool();
-			Mix_FadeOutMusic(1500);
+			result_shown = true;
+			bool continuing = instance->is_game_win && stage_index + 1 < stage_count;
+			if (!continuing) Mix_FadeOutMusic(1500);
+			SDL_SetWindowTitle(window, continuing ? u8"守住了！即将进入下一关" :
+				(instance->is_game_win ? u8"三关全部通关！" : u8"基地失守"));
 			Mix_PlayChannel(-1, sound_pool.find(instance->is_game_win ? ResID::Sound_Win : ResID::Sound_Loss)->second, 0);
 			banner->show();
 
 		}
-		is_game_over_last_tick = instance->is_game_over;
+		
 
 		
 		banner->on_update(delta);
 		if (banner->check_end_display())
 		{
-			is_quit = true;
+			if (instance->is_game_win && stage_index + 1 < stage_count)
+				advance_stage();
+			else
+				is_quit = true;
 		}
 		
 	}
@@ -215,12 +289,13 @@ private:
 
 		TowerManager::instance()->on_render(renderer);
 		BulletManager::instance()->on_render(renderer);
+		CoinManager::instance()->on_render(renderer);
 		PlayerManager::instance()->on_render(renderer);
 		if (!instance->is_game_over)
 		{
 			place_panel->on_render(renderer);
-			upgrade_panel->on_render(renderer);
 			status_bar.on_render(renderer);
+			tower_actions.render(renderer);
 			
 			return;
 		}
@@ -243,7 +318,6 @@ private:
 		SDL_QueryTexture(tex_tile_set, nullptr, nullptr, &width_tex_tile_set, &height_tex_tile_set);
 		int num_tile_single_line = (int)std::ceil((double)width_tex_tile_set / SIZE_TILE);
 
-
 		int width_tex_tile_map, height_tex_tile_map;
 		width_tex_tile_map = (int)map.get_width() * SIZE_TILE;
 		height_tex_tile_map = (int)map.get_height() * SIZE_TILE;
@@ -259,7 +333,6 @@ private:
 
 		SDL_SetTextureBlendMode(tex_tile_map, SDL_BLENDMODE_BLEND);
 		SDL_SetRenderTarget(renderer, tex_tile_map);
-
 
 		for (int y = 0;y < map.get_height();y++)
 		{
@@ -292,7 +365,6 @@ private:
 					};
 					SDL_RenderCopy(renderer, tex_tile_set, &rect_src, &rect_dst);
 				}
-
 
 			}
 		}
@@ -353,7 +425,6 @@ private:
 
 	}
 };
-
 
 #endif // !GAME_MANAGER_H_
 #pragma once

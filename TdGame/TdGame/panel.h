@@ -16,14 +16,17 @@ public:
 
 	}
 
-	~Panel()
+	virtual ~Panel()
 	{
 		SDL_DestroyTexture(tex_text_background);
 		SDL_DestroyTexture(tex_text_foreground);
 	}
 
+	void hide() { visible = false; }
+
 	void show()
 	{
+		hovered_target = None;
 		visible = true;
 	}
 
@@ -78,6 +81,7 @@ public:
 			break;
 		case SDL_MOUSEBUTTONUP:
 		{
+			if (event.button.button != SDL_BUTTON_LEFT) break;
 			switch (hovered_target)
 			{
 			case Panel::Top:
@@ -103,7 +107,7 @@ public:
 	{
 		static TTF_Font* font = ResourcesManager::instance()->get_font_pool().find(ResID::Font_Main)->second;
 		
-		if (hovered_target == HoveredTarget::None)
+		if (!visible || hovered_target == HoveredTarget::None)
 			return;
 		int val = 0;
 		switch (hovered_target)
@@ -126,9 +130,9 @@ public:
 		SDL_DestroyTexture(tex_text_foreground);
 		tex_text_foreground = nullptr;
 
-		std::string str_val = val < 0 ? "MAX" : std::to_string(val);
-		SDL_Surface* suf_text_background = TTF_RenderText_Blended(font, str_val.c_str(), color_text_background);
-		SDL_Surface* suf_text_foreground = TTF_RenderText_Blended(font, str_val.c_str(), color_text_foreground);
+		std::string str_val = option_text(val);
+		SDL_Surface* suf_text_background = TTF_RenderUTF8_Blended(font, str_val.c_str(), color_text_background);
+		SDL_Surface* suf_text_foreground = TTF_RenderUTF8_Blended(font, str_val.c_str(), color_text_foreground);
 		
 		width_text = suf_text_background->w, height_text = suf_text_background->h;
 		tex_text_background = SDL_CreateTextureFromSurface(renderer, suf_text_background);
@@ -219,6 +223,10 @@ protected:
 	int val_top = 0, val_left = 0, val_right = 0;
 
 protected:
+	virtual std::string option_text(int price) const
+	{
+		return std::to_string(price);
+	}
 	virtual void on_click_top_area() = 0;
 	virtual void on_click_left_area() = 0;
 	virtual void on_click_right_area() = 0;

@@ -27,7 +27,7 @@ public:
 		timer_restore_speed.set_on_timeout([&]() { speed = max_speed; });
 	}
 
-	~Enemy() = default;
+	virtual ~Enemy() = default;
 
 	void on_update(double delta)
 	{

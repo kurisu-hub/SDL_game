@@ -47,6 +47,11 @@ public:
 		}
 	}
 public:
+	int wave_number() const
+	{
+		return idx_wave + 1;
+	}
+
 	WaveManager()
 	{
 		static const std::vector<Wave>& wave_list = ConfigManager::instance()->wave_list;

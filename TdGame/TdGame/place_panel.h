@@ -33,18 +33,18 @@ public:
 	void on_update(SDL_Renderer* renderer)override
 	{	
 
-		static TowerManager* instance = TowerManager::instance();
+		auto* config = ConfigManager::instance();
 		
 
 		//轮盘的上左右分别是斧头兵，弓箭手和枪手,获得相关的建造需要的金币
-		val_top = (int)instance->get_place_const(TowerType::Axeman);
-		val_left = (int)instance->get_place_const(TowerType::Archer);
-		val_right = (int)instance->get_place_const(TowerType::Gunner);
+		val_top = (int)config->tower_stats(TowerType::Axeman).cost[0];
+		val_left = (int)config->tower_stats(TowerType::Archer).cost[0];
+		val_right = (int)config->tower_stats(TowerType::Gunner).cost[0];
 
 		//获取的范围要乘以SIZE_TILE，这样才能在正常的瓦片地图里面显示出来范围
-		reg_top = (int)instance->get_damage_range(TowerType::Axeman) * SIZE_TILE;
-		reg_left = (int)instance->get_damage_range(TowerType::Archer) * SIZE_TILE;
-		reg_right = (int)instance->get_damage_range(TowerType::Gunner) * SIZE_TILE;
+		reg_top = (int)config->tower_stats(TowerType::Axeman).view_range[0] * SIZE_TILE;
+		reg_left = (int)config->tower_stats(TowerType::Archer).view_range[0] * SIZE_TILE;
+		reg_right = (int)config->tower_stats(TowerType::Gunner).view_range[0] * SIZE_TILE;
 
 
 		Panel::on_update(renderer);
@@ -86,36 +86,15 @@ public:
 protected:
 	virtual void on_click_top_area()override
 	{
-		CoinManager* instance = CoinManager::instance();
-
-		if (val_top <= instance->get_current_coin_num())
-		{
-			TowerManager::instance()->place_tower(TowerType::Axeman, idx_tile_selected);
-			instance->decrease_coin(val_top);
-			
-		}
+		TowerManager::instance()->place_tower(TowerType::Axeman, idx_tile_selected);
 	}
 	virtual void on_click_left_area()override
 	{
-		CoinManager* instance = CoinManager::instance();
-
-		if (val_top <= instance->get_current_coin_num())
-		{
-			TowerManager::instance()->place_tower(TowerType::Archer, idx_tile_selected);
-			instance->decrease_coin(val_left);
-
-		}
+		TowerManager::instance()->place_tower(TowerType::Archer, idx_tile_selected);
 	}
 	virtual void on_click_right_area()override
 	{
-		CoinManager* instance = CoinManager::instance();
-
-		if (val_top <= instance->get_current_coin_num())
-		{
-			TowerManager::instance()->place_tower(TowerType::Gunner, idx_tile_selected);
-			instance->decrease_coin(val_right);
-			
-		}
+		TowerManager::instance()->place_tower(TowerType::Gunner, idx_tile_selected);
 	}
 private:
 

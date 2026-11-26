@@ -137,7 +137,7 @@ private:
 	{
 		static const SDL_Point& idx_home = ConfigManager::instance()->map.get_idx_home();
 		static const SDL_Rect& rect_tile_map = ConfigManager::instance()->rect_tile_map;
-		static const Vector2 position_home_tile =
+		const Vector2 position_home_tile =
 		{
 			(double)rect_tile_map.x + idx_home.x * SIZE_TILE,
 			(double)rect_tile_map.y + idx_home.y * SIZE_TILE
@@ -166,7 +166,7 @@ private:
 	//子弹碰撞
 	void process_bullet_collision()
 	{
-		static BulletManager::BulletList& bullet_list =
+		BulletManager::BulletList& bullet_list =
 			BulletManager::instance()->get_bullet_list();
 
 		for (Enemy* enemy : enemy_list)
@@ -241,7 +241,7 @@ private:
 	//设置尝试爆金币的函数
 	void try_spawn_coin_prop(const Vector2& position, double ratio)
 	{
-		static CoinManager* instance = CoinManager::instance();
+		CoinManager* instance = CoinManager::instance();
 
 		if ((double)(rand() % 100) / 100 <= ratio)
 			instance->spawn_coin_prop(position);

@@ -7,6 +7,7 @@
 #include"bullet_manager.h"
 #include"facing.h"
 #include"enemy_manager.h"
+#include"coin_manager.h"
 
 class Tower
 {
@@ -65,7 +66,27 @@ public:
 		);
 	}
 
-	~Tower() = default;
+	virtual ~Tower() = default;
+
+	int get_level() const { return level; }
+
+	double upgrade_price() const
+	{
+		return level == 10 ? -1 : ConfigManager::instance()->tower_stats(tower_type).upgrade_cost[level - 1];
+	}
+
+	// 只修改本塔等级；下次索敌和发射时使用新一级的属性。
+	bool buy_upgrade()
+	{
+		const double price = upgrade_price();
+		auto* coins = CoinManager::instance();
+		if (price < 0 || coins->get_current_coin_num() < price) return false;
+		coins->decrease_coin(price);
+		++level;
+		auto& sounds = ResourcesManager::instance()->get_sound_pool();
+		Mix_PlayChannel(-1, sounds.at(ResID::Sound_TowerLevelUp), 0);
+		return true;
+	}
 
 	void set_position(const Vector2& position)
 	{
@@ -121,6 +142,7 @@ protected:
 	double fire_speed = 0;
 	BulletType bullet_type = BulletType::Arrow;
 private:
+	int level = 1;
 	Timer timer_fire;
 	Vector2 position;
 	bool can_fire = true;
@@ -172,23 +194,8 @@ private:
 	{	
 		//逻辑：谁接近家，优先攻击谁
 		double process = -1;
-		double view_range = 0;
+		const double view_range = ConfigManager::instance()->tower_stats(tower_type).view_range[level - 1];
 		Enemy* enemy_target = nullptr;
-		
-		static ConfigManager* instance = ConfigManager::instance();
-		
-		switch (tower_type)
-		{
-		case Archer:
-			view_range = instance->archer_template.view_range[instance->level_archer];
-			break;
-		case Axeman:
-			view_range = instance->axeman_template.view_range[instance->level_axeman];
-			break;
-		case Gunner:
-			view_range = instance->gunner_template.view_range[instance->level_gunner];
-			break;
-		}
 		EnemyManager::EnemyList& enemy_list = EnemyManager::instance()->get_enemy_list();
 		
 		for (Enemy* enemy : enemy_list)
@@ -218,13 +225,13 @@ private:
 		static ConfigManager* instance = ConfigManager::instance();
 		static const ResourcesManager::SoundPool& sound_pool = ResourcesManager::instance()->get_sound_pool();
 		
-		double interval = 0, damage = 0;
+		const auto& stats = instance->tower_stats(tower_type);
+		const double interval = stats.interval[level - 1];
+		const double damage = stats.damage[level - 1];
 
 		switch (tower_type)
 		{
 		case Archer:
-			interval = instance->archer_template.interval[instance->level_archer];
-			damage = instance->archer_template.damage[instance->level_archer];
 			switch (rand()%3)
 			{
 			case 0:
@@ -238,13 +245,9 @@ private:
 			}
 			break;
 		case Axeman:
-			interval = instance->axeman_template.interval[instance->level_axeman];
-			damage = instance->axeman_template.damage[instance->level_axeman];
 			Mix_PlayChannel(-1, sound_pool.find(ResID::Sound_AxeFire)->second, 0);
 			break;
 		case Gunner:
-			interval = instance->gunner_template.interval[instance->level_gunner];
-			damage = instance->gunner_template.damage[instance->level_gunner];
 			Mix_PlayChannel(-1, sound_pool.find(ResID::Sound_ShellFire)->second, 0);
 			break;
 		}
